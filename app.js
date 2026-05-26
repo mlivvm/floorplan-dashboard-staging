@@ -2,7 +2,7 @@
     // CONFIGURATION
     // ============================================================
 
-    const APP_VERSION = '1.8.170';
+    const APP_VERSION = '1.8.171';
     const ENV_CONFIG = window.FD?.Env?.config || window.FD_ENV_CONFIG || {};
     const envStorageKey = (key) => (
       typeof ENV_CONFIG.storageKey === 'function'
@@ -234,6 +234,10 @@
     const appUpdateMessage = document.getElementById('app-update-message');
     const appUpdateConfirmButton = document.getElementById('app-update-confirm');
     const appUpdateLaterButton = document.getElementById('app-update-later');
+    const environmentBadges = [
+      document.getElementById('login-environment-badge'),
+      document.getElementById('topbar-environment-badge'),
+    ].filter(Boolean);
     const busyOverlayEl = document.getElementById('busy-overlay');
     const btnDashboard = document.getElementById('btn-dashboard');
     const btnTopbarMetadata = document.getElementById('btn-topbar-metadata');
@@ -315,6 +319,16 @@
       menuEl: topbarMenu,
       documentEl: document,
     });
+
+    function renderEnvironmentBadges() {
+      const isStaging = CONFIG.environment === 'staging';
+      environmentBadges.forEach(badge => {
+        badge.hidden = !isStaging;
+        if (isStaging) badge.textContent = 'STAGING';
+      });
+    }
+
+    renderEnvironmentBadges();
     const appUpdateDialog = FD.UIShellService.createPopupPair({
       overlayEl: appUpdateOverlay,
       popupEl: appUpdatePopup,
