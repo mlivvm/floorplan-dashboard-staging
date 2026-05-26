@@ -2,7 +2,7 @@
     // CONFIGURATION
     // ============================================================
 
-    const APP_VERSION = '1.8.168';
+    const APP_VERSION = '1.8.169';
     const ENV_CONFIG = window.FD?.Env?.config || window.FD_ENV_CONFIG || {};
     const envStorageKey = (key) => (
       typeof ENV_CONFIG.storageKey === 'function'
@@ -437,6 +437,16 @@
       return new RegExp(`APP_VERSION\\s*=\\s*['"]${escapedVersion}['"]`);
     }
 
+    function cacheVersionPattern(name, version) {
+      const escapedVersion = String(version || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`${name}\\s*(?::|=)\\s*['"]fd(?:-[a-z0-9-]+)?-v${escapedVersion}['"]`, 'i');
+    }
+
+    function assetVersionReady(source, cacheName, version) {
+      return appVersionPattern(version).test(source || '') ||
+        cacheVersionPattern(cacheName, version).test(source || '');
+    }
+
     function appAssetCheckUrl(path, version) {
       const url = new URL(path, window.location.href);
       if (version && path !== 'index.html' && path !== 'sw.js') {
@@ -478,8 +488,8 @@
 
         return indexHtmlReady(textByAsset.get('index.html'), remote.version) &&
           appCssReady(textByAsset.get('app.css'), remote.version) &&
-          appVersionPattern(remote.version).test(textByAsset.get('app.js') || '') &&
-          appVersionPattern(remote.version).test(textByAsset.get('sw.js') || '');
+          assetVersionReady(textByAsset.get('app.js'), 'offlineCacheVersion', remote.version) &&
+          assetVersionReady(textByAsset.get('sw.js'), 'CACHE_NAME', remote.version);
       } catch (err) {
         return false;
       }
