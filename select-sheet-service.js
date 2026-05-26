@@ -1,0 +1,292 @@
+(function (global) {
+  const FD = global.FD = global.FD || {};
+  const LABEL_COLLATOR = new Intl.Collator('nl', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+
+  function getSelectedOptionText(selectEl, fallback) {
+    if (!selectEl?.value) return fallback;
+    return selectEl.options[selectEl.selectedIndex]?.textContent || fallback;
+  }
+
+  function sortLabelEntries(left, right) {
+    const labelCompare = LABEL_COLLATOR.compare(left.label, right.label);
+    return labelCompare || left.index - right.index;
+  }
+
+  function sortedWithOriginalIndex(items, labelForItem) {
+    const safeItems = Array.isArray(items) ? items : [];
+    const labelFn = typeof labelForItem === 'function'
+      ? labelForItem
+      : item => item?.name || item?.customer || '';
+    return safeItems
+      .map((item, index) => ({
+        item,
+        index,
+        label: String(labelFn(item, index) || '').trim(),
+      }))
+      .sort(sortLabelEntries);
+  }
+
+  function floorplanDisplayParts(floorplan) {
+    const building = String(floorplan?.building || '').trim();
+    const floorLabel = String(floorplan?.floorLabel || '').trim();
+    return { building, floorLabel };
+  }
+
+  function floorplanDisplayName(floorplan) {
+    const { building, floorLabel } = floorplanDisplayParts(floorplan);
+    if (building && floorLabel) return `${building} - ${floorLabel}`;
+    return floorLabel || building || String(floorplan?.name || '').trim();
+  }
+
+  function renderSelectOptions(selectEl, placeholder, items, labelForItem) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = placeholder;
+    selectEl.appendChild(placeholderOption);
+
+    sortedWithOriginalIndex(items, labelForItem).forEach(({ index, label }) => {
+      const opt = document.createElement('option');
+      opt.value = String(index);
+      opt.textContent = label;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  function renderCustomerOptions(selectEl, customers) {
+    renderSelectOptions(selectEl, '-- Kies klant --', customers || [], customer => customer.customer);
+  }
+
+  function renderFloorplanOptions(selectEl, floorplans, options = {}) {
+    const labelForItem = typeof options.labelForItem === 'function'
+      ? options.labelForItem
+      : floorplan => floorplan.name;
+    renderSelectOptions(selectEl, '-- Kies plattegrond --', floorplans || [], labelForItem);
+    if (selectEl) selectEl.disabled = false;
+  }
+
+  function resetFloorplanOptions(selectEl, { disabled = true } = {}) {
+    renderSelectOptions(selectEl, '-- Kies plattegrond --', [], () => '');
+    if (selectEl) selectEl.disabled = disabled;
+  }
+
+  function selectedIndex(selectEl) {
+    const index = parseInt(selectEl?.value, 10);
+    return Number.isNaN(index) ? null : index;
+  }
+
+  function getSelectedFloorplan(customers, customerSelect, floorplanSelect) {
+    const customerIndex = selectedIndex(customerSelect);
+    const floorplanIndex = selectedIndex(floorplanSelect);
+    if (customerIndex === null || floorplanIndex === null || !customers?.[customerIndex]) {
+      return { customerIndex, floorplanIndex, customer: null, floorplan: null };
+    }
+    return {
+      customerIndex,
+      floorplanIndex,
+      customer: customers[customerIndex],
+      floorplan: customers[customerIndex].floorplans?.[floorplanIndex] || null,
+    };
+  }
+
+  function setSheetDisplay(elements, visible) {
+    elements.overlay.style.display = visible ? 'block' : 'none';
+    elements.sheet.style.display = visible ? 'flex' : 'none';
+  }
+
+  function appendEmpty(listEl, text) {
+    const empty = document.createElement('div');
+    empty.className = 'select-sheet-empty';
+    empty.textContent = text;
+    listEl.appendChild(empty);
+  }
+
+  function createController({
+    elements,
+    getState,
+    getItems,
+    onSelect,
+  }) {
+    let activeType = null;
+
+    function state() {
+      return typeof getState === 'function' ? getState() : {};
+    }
+
+    function updatePickerButtons() {
+      const { customerSelect, floorplanSelect, customerPickerBtn, floorplanPickerBtn, customerPickerValue, floorplanPickerValue } = elements;
+      const { customersLoading = false } = state();
+
+      customerPickerValue.textContent = customersLoading
+        ? 'Klanten laden...'
+        : getSelectedOptionText(customerSelect, 'Kies klant');
+      floorplanPickerValue.textContent = getSelectedOptionText(floorplanSelect, 'Kies plattegrond');
+      customerPickerBtn.disabled = customerSelect.disabled || customersLoading;
+      floorplanPickerBtn.disabled = floorplanSelect.disabled || !customerSelect.value;
+    }
+
+    function renderItems() {
+      const { customerSelect, floorplanSelect, search, list } = elements;
+      list.innerHTML = '';
+      if (!activeType) return;
+
+      const { customersLoading = false } = state();
+      if (activeType === 'customer' && customersLoading) {
+        appendEmpty(list, 'Klanten laden...');
+        return;
+      }
+
+      const query = search.value.trim().toLowerCase();
+      const currentValue = activeType === 'customer' ? customerSelect.value : floorplanSelect.value;
+      const typeAtRender = activeType;
+      const items = (typeof getItems === 'function' ? getItems(typeAtRender) : [])
+        .filter(item => item.label.toLowerCase().includes(query));
+
+      if (!items.length) {
+        appendEmpty(list, 'Geen resultaten');
+        return;
+      }
+
+      items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'select-sheet-item';
+        if (String(item.index) === currentValue) btn.classList.add('selected');
+        if (item.readOnly) btn.classList.add('readonly');
+        const label = document.createElement('span');
+        label.textContent = item.label;
+        btn.appendChild(label);
+        if (item.meta) {
+          const meta = document.createElement('span');
+          meta.className = 'select-sheet-item-meta';
+          meta.textContent = item.meta;
+          btn.appendChild(meta);
+        }
+        btn.addEventListener('click', () => {
+          if (typeof onSelect === 'function') onSelect(typeAtRender, item);
+          close();
+        });
+        list.appendChild(btn);
+      });
+    }
+
+    function open(type) {
+      updatePickerButtons();
+      const { customerPickerBtn, floorplanPickerBtn, eyebrow, title, search } = elements;
+      const { customersLoading = false } = state();
+      if (type === 'customer' && (customersLoading || customerPickerBtn.disabled)) return;
+      if (type === 'floorplan' && floorplanPickerBtn.disabled) return;
+
+      activeType = type;
+      eyebrow.textContent = type === 'customer' ? 'Klant' : 'Plattegrond';
+      title.textContent = type === 'customer' ? 'Kies klant' : 'Kies plattegrond';
+      search.value = '';
+      setSheetDisplay(elements, true);
+      renderItems();
+      setTimeout(() => search.focus(), 0);
+    }
+
+    function close() {
+      setSheetDisplay(elements, false);
+      activeType = null;
+    }
+
+    function isOpen(type) {
+      return type ? activeType === type : Boolean(activeType);
+    }
+
+    return {
+      close,
+      getActiveType: () => activeType,
+      isOpen,
+      open,
+      renderItems,
+      updatePickerButtons,
+    };
+  }
+
+  function createSelectionController({
+    elements,
+    getState,
+    getItems,
+    onCustomerChange,
+    onFloorplanChange,
+  }) {
+    let bound = false;
+    const sheetController = createController({
+      elements,
+      getState,
+      getItems,
+      onSelect: (type, item) => {
+        if (type === 'customer') {
+          elements.customerSelect.value = String(item.index);
+          handleCustomerChange();
+        } else {
+          elements.floorplanSelect.value = String(item.index);
+          handleFloorplanChange();
+        }
+      },
+    });
+
+    function handleCustomerChange() {
+      sheetController.updatePickerButtons();
+      if (typeof onCustomerChange === 'function') {
+        onCustomerChange({
+          value: elements.customerSelect.value,
+          customerIndex: selectedIndex(elements.customerSelect),
+        });
+      }
+    }
+
+    function handleFloorplanChange() {
+      sheetController.updatePickerButtons();
+      if (typeof onFloorplanChange === 'function') {
+        onFloorplanChange({
+          value: elements.floorplanSelect.value,
+          customerIndex: selectedIndex(elements.customerSelect),
+          floorplanIndex: selectedIndex(elements.floorplanSelect),
+        });
+      }
+    }
+
+    function bind() {
+      if (bound) return;
+      bound = true;
+      elements.customerPickerBtn.addEventListener('click', () => sheetController.open('customer'));
+      elements.floorplanPickerBtn.addEventListener('click', () => sheetController.open('floorplan'));
+      elements.search.addEventListener('input', sheetController.renderItems);
+      elements.closeButton.addEventListener('click', sheetController.close);
+      elements.overlay.addEventListener('click', sheetController.close);
+      elements.customerSelect.addEventListener('change', handleCustomerChange);
+      elements.floorplanSelect.addEventListener('change', handleFloorplanChange);
+    }
+
+    return {
+      bind,
+      close: sheetController.close,
+      getActiveType: sheetController.getActiveType,
+      isOpen: sheetController.isOpen,
+      open: sheetController.open,
+      renderItems: sheetController.renderItems,
+      updatePickerButtons: sheetController.updatePickerButtons,
+    };
+  }
+
+  FD.SelectSheetService = {
+    createController,
+    createSelectionController,
+    floorplanDisplayName,
+    floorplanDisplayParts,
+    getSelectedFloorplan,
+    getSelectedOptionText,
+    renderCustomerOptions,
+    renderFloorplanOptions,
+    resetFloorplanOptions,
+    selectedIndex,
+    sortedWithOriginalIndex,
+  };
+})(window);
