@@ -1,10 +1,11 @@
 importScripts('env-config.js');
 
-const APP_VERSION = '1.8.169';
+const APP_VERSION = '1.8.170';
 const ENV_CONFIG = self.FD?.Env?.config || self.FD_ENV_CONFIG || {};
 const CACHE_NAME = typeof ENV_CONFIG.cacheNameForVersion === 'function'
   ? ENV_CONFIG.cacheNameForVersion(APP_VERSION)
   : `fd-v${APP_VERSION}`;
+const CACHE_PREFIX = String(ENV_CONFIG.cachePrefix || 'fd-v');
 const WORKER_API_HOSTNAME = ENV_CONFIG.workerApiHostname || (() => {
   try {
     return new URL(ENV_CONFIG.workerApiBaseUrl || 'https://floorplan-dashboard-api.mko-floorplan-dashboard.workers.dev').hostname;
@@ -13,31 +14,42 @@ const WORKER_API_HOSTNAME = ENV_CONFIG.workerApiHostname || (() => {
   }
 })();
 
+function isManagedCacheName(cacheName) {
+  const name = String(cacheName || '');
+  if (CACHE_PREFIX === 'fd-live-v') {
+    return name.startsWith(CACHE_PREFIX) || /^fd-v\d+\.\d+\.\d+$/i.test(name);
+  }
+  if (CACHE_PREFIX === 'fd-v') {
+    return /^fd-v\d+\.\d+\.\d+$/i.test(name);
+  }
+  return name.startsWith(CACHE_PREFIX);
+}
+
 const STATIC_ASSETS = [
   './',
   'index.html',
-  'admin-dashboard-tokens.css?v=1.8.169',
-  'app.css?v=1.8.169',
-  'env-config.js?v=1.8.169',
-  'data-service.js?v=1.8.169',
-  'diagnostics-service.js?v=1.8.169',
-  'floorplan-cache-service.js?v=1.8.169',
-  'floorplan-view-service.js?v=1.8.169',
-  'auth-service.js?v=1.8.169',
-  'status-service.js?v=1.8.169',
-  'status-sync-service.js?v=1.8.169',
-  'mode-service.js?v=1.8.169',
-  'image-editor-service.js?v=1.8.169',
-  'viewport-service.js?v=1.8.169',
-  'marker-service.js?v=1.8.169',
-  'door-action-service.js?v=1.8.169',
-  'ui-shell-service.js?v=1.8.169',
-  'edit-ui-service.js?v=1.8.169',
-  'pdf-import-service.js?v=1.8.169',
-  'upload-service.js?v=1.8.169',
-  'select-sheet-service.js?v=1.8.169',
-  'side-panel-service.js?v=1.8.169',
-  'app.js?v=1.8.169',
+  'admin-dashboard-tokens.css?v=1.8.170',
+  'app.css?v=1.8.170',
+  'env-config.js?v=1.8.170',
+  'data-service.js?v=1.8.170',
+  'diagnostics-service.js?v=1.8.170',
+  'floorplan-cache-service.js?v=1.8.170',
+  'floorplan-view-service.js?v=1.8.170',
+  'auth-service.js?v=1.8.170',
+  'status-service.js?v=1.8.170',
+  'status-sync-service.js?v=1.8.170',
+  'mode-service.js?v=1.8.170',
+  'image-editor-service.js?v=1.8.170',
+  'viewport-service.js?v=1.8.170',
+  'marker-service.js?v=1.8.170',
+  'door-action-service.js?v=1.8.170',
+  'ui-shell-service.js?v=1.8.170',
+  'edit-ui-service.js?v=1.8.170',
+  'pdf-import-service.js?v=1.8.170',
+  'upload-service.js?v=1.8.170',
+  'select-sheet-service.js?v=1.8.170',
+  'side-panel-service.js?v=1.8.170',
+  'app.js?v=1.8.170',
   'version.json',
   'manifest.json',
   'icon-192.png',
@@ -84,7 +96,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        keys.filter(k => k !== CACHE_NAME && isManagedCacheName(k)).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
