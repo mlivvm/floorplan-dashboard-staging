@@ -1,11 +1,11 @@
 {
-  "version": "1.9.30",
-  "cache": "fd-staging-v1.9.30",
+  "version": "1.9.31",
+  "cache": "fd-staging-v1.9.31",
   "environment": "staging",
-  "sourceCommit": "77628d5a0967e391034567cb1f36c93804addc0c",
-  "sourceShortCommit": "77628d5a0967",
+  "sourceCommit": "7e72b07580061daa405684bc3eff70adce201d1a",
+  "sourceShortCommit": "7e72b0758006",
   "sourceDirty": false,
-  "deployedAt": "2026-06-16T03:20:46.956Z",
+  "deployedAt": "2026-06-16T04:11:19.322Z",
   "appUrl": "https://mlivvm.github.io/floorplan-dashboard-staging/",
   "workerBaseUrl": "https://floorplan-dashboard-api-staging.mko-floorplan-dashboard.workers.dev"
 }
